@@ -12,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from src.agents import run_research
+from src.agents.morning_brief_agent import MorningBriefAgent
 from src.api.metrics import (
     ANALYSIS_DURATION,
     ANALYSIS_REQUESTS,
@@ -690,6 +691,16 @@ async def create_alert(
         logger.error("alert_create_failed", user_id=user_id, ticker=ticker, error=str(e))
         raise HTTPException(status_code=500, detail=str(e)) from None
 
+@app.get("/morning-brief")
+async def morning_brief() -> dict[str, Any]:
+    agent = MorningBriefAgent()
+
+    report = agent.generate()
+
+    return {
+        "status": "success",
+        "report": report,
+    }
 
 if __name__ == "__main__":  # pragma: no cover
     import uvicorn

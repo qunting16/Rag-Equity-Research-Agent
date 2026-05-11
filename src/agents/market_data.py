@@ -6,6 +6,7 @@ from typing import Any
 import structlog
 
 from src.tools import YFinanceTool
+from src.tools.akshare_tool import AkShareTool
 
 logger = structlog.get_logger()
 
@@ -34,12 +35,36 @@ class MarketDataAgent:
     def __init__(self) -> None:
         """Initialize market data agent."""
         self._yfinance = YFinanceTool()
+        self._akshare = AkShareTool()
 
-    def _format_price(self, price: float | None) -> str:
+    def _is_a_share(self, ticker: str) -> bool:
+        """Detect China A-share symbols."""
+        t = ticker.lower()
+        return (
+            t.startswith("sh")
+            or t.startswith("sz")
+            or t.startswith("bj")
+            or (len(t) == 6 and t.isdigit())
+        )
+
+    def _normalize_a_share_symbol(self, ticker: str) -> str:
+        """Normalize A-share symbol for AkShare Sina source."""
+        t = ticker.lower()
+        if t.startswith(("sh", "sz", "bj")):
+            return t
+        if t.startswith("6"):
+            return "sh" + t
+        if t.startswith(("0", "3")):
+            return "sz" + t
+        if t.startswith(("8", "4", "9")):
+            return "bj" + t
+        return t
+
+    def _format_price(self, price: float | None, currency: str = "$") -> str:
         """Format price for display."""
         if price is None:
             return "N/A"
-        return f"${price:,.2f}"
+        return f"{currency}{price:,.2f}"
 
     def _format_large_number(self, num: float | None) -> str:
         """Format large numbers (billions, millions)."""
@@ -77,20 +102,36 @@ class MarketDataAgent:
 
             # Get quote
             try:
-                quote = self._yfinance.get_quote(ticker)
-                if quote:
-                    quotes[ticker] = quote.to_dict()
+                if self._is_a_share(ticker):
+                    a_symbol = self._normalize_a_share_symbol(ticker)
+                    quote = self._akshare.get_quote(a_symbol)
+                    if quote:
+                        quotes[ticker] = quote.to_dict()
+                        quotes[ticker]["market"] = "China A-share"
+                    else:
+                        errors.append(f"No A-share quote data for {ticker}")
                 else:
-                    errors.append(f"No quote data for {ticker}")
+                    quote = self._yfinance.get_quote(ticker)
+                    if quote:
+                        quotes[ticker] = quote.to_dict()
+                        quotes[ticker]["market"] = "US"
+                    else:
+                        errors.append(f"No quote data for {ticker}")
             except Exception as e:
                 errors.append(f"Error fetching quote for {ticker}: {str(e)}")
                 logger.error("quote_fetch_error", ticker=ticker, error=str(e))
 
             # Get financials
             try:
-                metrics = self._yfinance.get_financials(ticker)
-                if metrics:
-                    financials[ticker] = metrics.to_dict()
+                if self._is_a_share(ticker):
+                    a_symbol = self._normalize_a_share_symbol(ticker)
+                    metrics = self._akshare.get_financials(a_symbol)
+                    if metrics:
+                        financials[ticker] = metrics.to_dict()
+                else:
+                    metrics = self._yfinance.get_financials(ticker)
+                    if metrics:
+                        financials[ticker] = metrics.to_dict()
             except Exception as e:
                 errors.append(f"Error fetching financials for {ticker}: {str(e)}")
                 logger.error("financials_fetch_error", ticker=ticker, error=str(e))
@@ -129,7 +170,8 @@ class MarketDataAgent:
         lines = ["## Market Data Summary\n"]
 
         for ticker, quote in quotes.items():
-            price = self._format_price(quote.get("price"))
+            currency = "¥" if quote.get("market") == "China A-share" else "$"
+            price = self._format_price(quote.get("price"), currency=currency)
             change_pct = quote.get("change_percent", 0)
             change_str = f"+{change_pct:.2f}%" if change_pct >= 0 else f"{change_pct:.2f}%"
             market_cap = self._format_large_number(quote.get("market_cap"))
@@ -138,6 +180,7 @@ class MarketDataAgent:
 
             lines.append(f"### {ticker} ({quote.get('name', ticker)})")
             lines.append(f"- **Price**: {price} ({change_str})")
+            lines.append(f"- **Market**: {quote.get('market', 'Unknown')}")
             lines.append(f"- **Market Cap**: {market_cap}")
             lines.append(f"- **P/E Ratio**: {pe_str}")
             lines.append(f"- **Market State**: {quote.get('market_state', 'Unknown')}")
@@ -145,9 +188,9 @@ class MarketDataAgent:
             # Add financial metrics if available
             if ticker in financials:
                 fin = financials[ticker]
-                lines.append(f"- **Revenue**: {self._format_large_number(fin.get('revenue'))}")
+                lines.append(f"- **Revenue**: {self._format_large_number(fin.get('revenue')).replace('$', '¥') if quote.get('market') == 'China A-share' else self._format_large_number(fin.get('revenue'))}")
                 lines.append(
-                    f"- **Net Income**: {self._format_large_number(fin.get('net_income'))}"
+                    f"- **Net Income**: {self._format_large_number(fin.get('net_income')).replace('$', '¥') if quote.get('market') == 'China A-share' else self._format_large_number(fin.get('net_income'))}"
                 )
                 lines.append(
                     f"- **Profit Margin**: {self._format_percent(fin.get('profit_margin'))}"

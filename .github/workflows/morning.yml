@@ -1,0 +1,33 @@
+name: Morning Brief
+
+on:
+  schedule:
+    - cron: '30 0 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  run-morning-brief:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run morning brief
+        run: |
+          python scripts/morning_brief.py
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: morning-report
+          path: reports/

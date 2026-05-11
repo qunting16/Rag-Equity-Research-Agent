@@ -6,6 +6,7 @@ from typing import Any
 import structlog
 
 from src.tools import DuckDuckGoSearchTool
+from src.tools.china_news_tool import ChinaNewsTool
 
 logger = structlog.get_logger()
 
@@ -33,6 +34,7 @@ class NewsSentimentAgent:
     def __init__(self) -> None:
         """Initialize news sentiment agent."""
         self._search_tool = DuckDuckGoSearchTool()
+        self._china_news_tool = ChinaNewsTool()
 
     def analyze(
         self,
@@ -54,13 +56,22 @@ class NewsSentimentAgent:
         errors = []
 
         # Search for news
-        try:
-            news = self._search_tool.search_stock_news(ticker, company_name)
-            articles = [n.to_dict() for n in news[:max_articles]]
-        except Exception as e:
-            logger.error("news_search_failed", ticker=ticker, error=str(e))
-            errors.append(f"News search failed: {str(e)}")
-            articles = []
+        if ticker.isdigit() or ticker.lower().startswith(("sh", "sz", "bj")):
+            try:
+                news = self._china_news_tool.get_stock_news(ticker, limit=max_articles)
+                articles = [n.to_dict() for n in news]
+            except Exception as e:
+                logger.error("a_share_news_failed", ticker=ticker, error=str(e))
+                errors.append(f"A-share news search failed: {str(e)}")
+                articles = []
+        else:
+            try:
+                news = self._search_tool.search_stock_news(ticker, company_name)
+                articles = [n.to_dict() for n in news[:max_articles]]
+            except Exception as e:
+                logger.error("news_search_failed", ticker=ticker, error=str(e))
+                errors.append(f"News search failed: {str(e)}")
+                articles = []
 
         # Generate summary
         summary = self._generate_summary(ticker, company_name, articles)
@@ -85,10 +96,10 @@ class NewsSentimentAgent:
         display_name = company_name or ticker
 
         if not articles:
-            return f"No recent news found for {display_name}."
+            return f"暂无可用中文新闻数据：{display_name}。下一阶段将接入新浪财经、东方财富或雪球数据源。"
 
-        lines = [f"## Recent News: {display_name} ({ticker})\n"]
-        lines.append(f"**{len(articles)} recent articles found**\n")
+        lines = [f"## 近期新闻： {display_name} ({ticker})\n"]
+        lines.append(f"**{len(articles)} 条相关新闻**\n")
 
         for i, article in enumerate(articles, 1):
             title = article.get("title", "Untitled")
@@ -98,11 +109,11 @@ class NewsSentimentAgent:
             url = article.get("url", "")
 
             lines.append(f"### {i}. {title}")
-            lines.append(f"**Source**: {source} | **Date**: {date}")
+            lines.append(f"**来源**: {source} | **时间**: {date}")
             if snippet:
                 lines.append(f"> {snippet[:300]}{'...' if len(snippet) > 300 else ''}")
             if url:
-                lines.append(f"[Read more]({url})")
+                lines.append(f"[阅读原文]({url})")
             lines.append("")
 
         return "\n".join(lines)

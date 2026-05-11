@@ -257,7 +257,7 @@ class SynthesizerAgent:
         )
 
         # Build prompt
-        user_prompt = f"""Based on the following research data, create a comprehensive equity research report.
+        user_prompt = f"""Based on the following research data, create a comprehensive equity research report. If the ticker is a China A-share stock, write the report in Chinese and use China A-share terminology.
 
 {context}
 
@@ -268,13 +268,20 @@ Please generate:
 1. An executive summary (2-3 paragraphs)
 2. A detailed analysis covering:
    - Current market position and valuation
-   - Key findings from SEC filings (if available)
+   - Key findings from annual reports / company filings (if available)
    - Earnings call highlights (if available)
-   - Social sentiment from Reddit (if available)
+   - Investor sentiment from social platforms (if available)
    - Peer comparison insights (if available)
-   - Risk assessment from 10-K (if available)
+   - Risk assessment from filings / public disclosures (if available)
    - Recent news and sentiment
    - Investment considerations
+
+Rules:
+- Do not invent data.
+- If a section has no real data, write "暂无可靠数据" instead of guessing.
+- Only use the provided market data, financial data, and news.
+- Do not claim social sentiment, peer comparison, annual report, or filings analysis unless actual data is provided.
+- For A-share stocks, write in Chinese.
 
 Format as a professional markdown report."""
 
@@ -307,19 +314,19 @@ Format as a professional markdown report."""
         # Determine data sources used
         data_sources = []
         if market_data:
-            data_sources.append("Yahoo Finance (real-time)")
+            data_sources.append("AkShare / Yahoo Finance market data")
         if document_analysis:
-            data_sources.append("SEC EDGAR (10-K filings)")
+            data_sources.append("Company filings / annual reports")
         if earnings_analysis:
             data_sources.append("Earnings Call Transcripts")
         if reddit_sentiment:
-            data_sources.append("Reddit (WSB, stocks, investing)")
+            data_sources.append("Investor social sentiment")
         if peer_analysis:
             data_sources.append("Peer Comparison Analysis")
         if risk_assessment:
-            data_sources.append("10-K Risk Factor Analysis")
+            data_sources.append("Public disclosure risk analysis")
         if news_analysis:
-            data_sources.append("DuckDuckGo News")
+            data_sources.append("Financial news search")
 
         return ResearchReport(
             title=f"Equity Research: {', '.join(tickers)}",
