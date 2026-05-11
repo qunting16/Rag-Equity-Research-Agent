@@ -691,6 +691,7 @@ async def create_alert(
         logger.error("alert_create_failed", user_id=user_id, ticker=ticker, error=str(e))
         raise HTTPException(status_code=500, detail=str(e)) from None
 
+
 @app.get("/morning-brief")
 async def morning_brief() -> dict[str, Any]:
     agent = MorningBriefAgent()
@@ -701,6 +702,7 @@ async def morning_brief() -> dict[str, Any]:
         "status": "success",
         "report": report,
     }
+
 
 if __name__ == "__main__":  # pragma: no cover
     import uvicorn

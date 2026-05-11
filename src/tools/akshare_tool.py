@@ -59,7 +59,9 @@ class AkShareTool:
     def get_quote(self, symbol: str) -> AShareQuote | None:
         df = ak.stock_zh_a_spot()
         pure = self._pure_symbol(symbol)
-        row = df[(df["代码"].astype(str) == symbol.lower()) | (df["代码"].astype(str) == pure)].head(1)
+        row = df[
+            (df["代码"].astype(str) == symbol.lower()) | (df["代码"].astype(str) == pure)
+        ].head(1)
 
         if row.empty:
             return None

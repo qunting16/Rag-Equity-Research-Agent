@@ -188,7 +188,9 @@ class MarketDataAgent:
             # Add financial metrics if available
             if ticker in financials:
                 fin = financials[ticker]
-                lines.append(f"- **Revenue**: {self._format_large_number(fin.get('revenue')).replace('$', '¥') if quote.get('market') == 'China A-share' else self._format_large_number(fin.get('revenue'))}")
+                lines.append(
+                    f"- **Revenue**: {self._format_large_number(fin.get('revenue')).replace('$', '¥') if quote.get('market') == 'China A-share' else self._format_large_number(fin.get('revenue'))}"
+                )
                 lines.append(
                     f"- **Net Income**: {self._format_large_number(fin.get('net_income')).replace('$', '¥') if quote.get('market') == 'China A-share' else self._format_large_number(fin.get('net_income'))}"
                 )

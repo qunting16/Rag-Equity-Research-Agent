@@ -89,4 +89,3 @@ class NewsImpactAgent:
             new_thesis=updated_thesis,
         )
         return result
-
