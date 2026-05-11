@@ -9,6 +9,10 @@ jobs:
   run-morning-brief:
     runs-on: ubuntu-latest
 
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      TZ: Asia/Shanghai
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
