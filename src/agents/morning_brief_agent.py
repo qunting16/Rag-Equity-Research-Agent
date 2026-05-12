@@ -6,11 +6,13 @@ from datetime import datetime
 from typing import Any
 
 from src.tools.china_multi_source_news_tool import ChinaMultiSourceNewsTool
+from src.tools.cninfo_tool import CNInfoTool
 
 
 class MorningBriefAgent:
     def __init__(self) -> None:
         self.news_tool = ChinaMultiSourceNewsTool()
+        self.cninfo_tool = CNInfoTool()
 
     def generate(self, limit: int = 120) -> dict[str, Any]:
         articles = self.news_tool.get_global_news(limit=limit)
@@ -23,6 +25,7 @@ class MorningBriefAgent:
             "affected_sectors": [],
             "company_news": [],
             "risks": [],
+            "cninfo_announcements": [],
         }
 
         for article in articles:
@@ -46,6 +49,19 @@ class MorningBriefAgent:
                 sections["company_news"].append(item)
             elif self._is_sector_related(article):
                 sections["affected_sectors"].append(item)
+
+        try:
+            announcements = self.cninfo_tool.get_recent_announcements(days=2, limit=12)
+            sections["cninfo_announcements"] = announcements
+        except Exception as exc:
+            sections["cninfo_announcements"] = [
+                {
+                    "title": f"巨潮公告抓取失败：{exc}",
+                    "source": "巨潮资讯",
+                    "category": "error",
+                    "time": "未知时间",
+                }
+            ]
 
         markdown = self._render_markdown(today, sections)
 
@@ -330,6 +346,9 @@ class MorningBriefAgent:
             "## 6. 风险提示",
             *self._render_items(sections["risks"]),
             "",
+            "## 7. 巨潮重要公告",
+            *self._render_cninfo_items(sections["cninfo_announcements"]),
+            "",
         ]
 
         return "\n".join(lines)
@@ -355,10 +374,50 @@ class MorningBriefAgent:
             seen_titles.add(normalized_title)
 
             time = item.get("published_at") or "未知时间"
-            platform = item.get("platform") or "未知来源"
-            event_type = item.get("event_type") or "general"
+            platform = item.get("platform") or item.get("source") or "未知来源"
+            event_type = item.get("event_type") or item.get("category") or "general"
 
             lines.append(f"- [{time}] [{platform}] [{event_type}] {title}")
+
+            if len(lines) >= limit:
+                break
+
+        if not lines:
+            return ["- 暂无可靠数据"]
+
+        return lines
+
+    def _render_cninfo_items(
+        self,
+        items: list[dict[str, Any]],
+        limit: int = 8,
+    ) -> list[str]:
+        if not items:
+            return ["- 暂无可靠数据"]
+
+        lines: list[str] = []
+        seen_titles: set[str] = set()
+
+        for item in items:
+            title = item.get("title") or ""
+            normalized_title = self._normalize_title(title)
+
+            if normalized_title in seen_titles:
+                continue
+
+            seen_titles.add(normalized_title)
+
+            code = item.get("code") or ""
+            name = item.get("name") or ""
+            time = item.get("time") or "未知时间"
+            url = item.get("url") or ""
+
+            company = f"{name}({code})" if name and code else name or code or "未知公司"
+
+            if url:
+                lines.append(f"- [{time}] [{company}] [{title}]({url})")
+            else:
+                lines.append(f"- [{time}] [{company}] {title}")
 
             if len(lines) >= limit:
                 break
