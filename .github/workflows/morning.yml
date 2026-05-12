@@ -35,21 +35,63 @@ jobs:
         env:
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
         run: |
-          if [ -z "$SERVERCHAN_SENDKEY" ]; then
-            echo "SERVERCHAN_SENDKEY is empty"
-            exit 1
-          fi
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
 
-          REPORT_FILE=$(ls reports/morning_brief_*.md | tail -n 1)
-          TITLE="AI A股晨报已生成"
-          CONTENT=$(cat "$REPORT_FILE" | head -c 3500)
+          sendkey = os.environ.get("SERVERCHAN_SENDKEY", "")
+          if not sendkey:
+              print("SERVERCHAN_SENDKEY is empty")
+              sys.exit(1)
 
-          echo "Using report: $REPORT_FILE"
-          RESPONSE=$(curl -s "https://sctapi.ftqq.com/${SERVERCHAN_SENDKEY}.send" \
-            -d "title=${TITLE}" \
-            --data-urlencode "desp=${CONTENT}")
+          report_files = sorted(Path("reports").glob("morning_brief_*.md"))
+          if not report_files:
+              print("No morning brief report found")
+              sys.exit(1)
 
-          echo "$RESPONSE"
+          report_file = report_files[-1]
+          content = report_file.read_text(encoding="utf-8", errors="ignore")
+
+          # Server酱正文不要太长，先截取前 3000 个中文字符
+          content = content[:3000]
+
+          # 清理少数控制字符
+          content = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", content)
+
+          title = "AI A股晨报已生成"
+
+          data = urllib.parse.urlencode({
+              "title": title,
+              "desp": content,
+          }).encode("utf-8")
+
+          url = f"https://sctapi.ftqq.com/{sendkey}.send"
+
+          req = urllib.request.Request(
+              url,
+              data=data,
+              headers={
+                  "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"
+              },
+              method="POST",
+          )
+
+          with urllib.request.urlopen(req, timeout=20) as resp:
+              body = resp.read().decode("utf-8", errors="ignore")
+              print(body)
+
+          try:
+              payload = json.loads(body)
+              if str(payload.get("code")) not in ("0", "200"):
+                  sys.exit(1)
+          except Exception:
+              pass
+          PY
 
       - name: Upload report
         uses: actions/upload-artifact@v4
