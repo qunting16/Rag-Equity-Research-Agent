@@ -35,13 +35,21 @@ jobs:
         env:
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
         run: |
+          if [ -z "$SERVERCHAN_SENDKEY" ]; then
+            echo "SERVERCHAN_SENDKEY is empty"
+            exit 1
+          fi
+
           REPORT_FILE=$(ls reports/morning_brief_*.md | tail -n 1)
           TITLE="AI A股晨报已生成"
           CONTENT=$(cat "$REPORT_FILE" | head -c 3500)
 
-          curl -s "https://sctapi.ftqq.com/${SERVERCHAN_SENDKEY}.send" \
+          echo "Using report: $REPORT_FILE"
+          RESPONSE=$(curl -s "https://sctapi.ftqq.com/${SERVERCHAN_SENDKEY}.send" \
             -d "title=${TITLE}" \
-            --data-urlencode "desp=${CONTENT}"
+            --data-urlencode "desp=${CONTENT}")
+
+          echo "$RESPONSE"
 
       - name: Upload report
         uses: actions/upload-artifact@v4
